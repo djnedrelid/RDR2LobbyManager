@@ -1,4 +1,5 @@
-﻿// RDR2LobbyManager.cpp : Defines the entry point for the application.
+﻿// 
+//	Litt rotete kode, var et kjapt prosjekt..
 //
 
 #include "framework.h"
