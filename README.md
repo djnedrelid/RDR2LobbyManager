@@ -14,4 +14,7 @@ Tydeligvis er dette etter Rockstar sitt design, da man ved hjelp av denne tekstf
 få XML detaljer i seg) får lov å havne i en unik lobby med alle andre som har samme hash av filen 
 (skapes ved å ha unikt passord i samme fil for at den skal være unik og annerledes fra andre folk sin).  
 
-Du trenger IKKE ha programmet kjørende. Bare skriv et passord, slå på knappen, og lukk programmet. Da eksisterer filen som trengs!
+Du trenger IKKE ha programmet kjørende. Bare skriv et passord, slå på knappen, og lukk programmet. Da eksisterer filen som trengs!  
+
+Programmet administrerer kun meta filen og gjør ingen endringer på spillfiler annet enn dette.  
+Denne filen trengs heller ikke for å spille, og eksisterer ikke som standard.
