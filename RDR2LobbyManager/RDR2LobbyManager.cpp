@@ -15,7 +15,7 @@ HWND ToolTip1;
 bool SwitchIsOn = false;
 std::wstring ThePassword = L"";
 std::mutex gMutexLock;
-std::wstring StartupMetaPath;
+std::vector<std::wstring> StartupMetaPath;
 
 
 //
@@ -29,9 +29,12 @@ void WatchPasswordChanges()
 		wchar_t Buf[1024] = {0};
 		SendMessageW(PassordBoks, WM_GETTEXT, 1024,	(LPARAM)&Buf);
 
-		// Slett og oppdater bryter hvis brukeren tukler med passord.
+		// Slett metafiler og oppdater bryter hvis brukeren tukler med passord.
 		if (ThePassword != Buf) {
-			_wremove(StartupMetaPath.c_str());
+
+			for (int a=0; a<StartupMetaPath.size(); a++)
+				_wremove(StartupMetaPath.at(a).c_str());
+			
 			HANDLE OnOffBtnImg = LoadImageW(
 				GetModuleHandle(NULL),
 				MAKEINTRESOURCE(OffBtn_BITMAP),
@@ -94,49 +97,60 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	RegGetValueW(rdr2RegKey, L"", L"InstallFolderSteam", RRF_RT_REG_SZ, 0, &InstallFolderSteam, &InstallFolderSize);
 
 	// Sjekk om minst 1 installasjon ble funnet.
-	if (InstallFolderEpic[0] == 0 && InstallFolderSteam[0] == 0) 
+	if (InstallFolderEpic[0] == 0 && InstallFolderSteam[0] == 0) {
 		MiscStaticFuncsClass::GetErrorW(L"Could not find any RDR2 installations in registry.", true);
-	else if (InstallFolderEpic[0] != 0) 
-		StartupMetaPath = InstallFolderEpic;
-	else if (InstallFolderSteam[0] != 0) 
-		StartupMetaPath = InstallFolderSteam;
-	StartupMetaPath.append(L"\\x64\\data\\startup.meta");
+
+	} else if (InstallFolderEpic[0] != 0) {
+		StartupMetaPath.push_back(InstallFolderEpic);
+	
+	} else if (InstallFolderSteam[0] != 0) {
+
+		// Ta høyde for feilregistrering av rockstar games i registeret for steam versjoner.
+		std::wstring feilreg = L"Red Dead Redemption 2\\Red Dead Redemption 2";
+		std::wstring steamreg = InstallFolderSteam;
+		if (steamreg.compare(steamreg.length() - feilreg.length(), feilreg.length(), feilreg) == 0)
+			steamreg = steamreg.substr(0, steamreg.length() - feilreg.length()) + L"Red Dead Redemption 2";
+
+		StartupMetaPath.push_back(steamreg);
+	}
+
+	// Legg til resten av sti per funn.
+	for (int a=0; a<StartupMetaPath.size(); a++)
+		StartupMetaPath.at(a).append(L"\\x64\\data\\startup.meta");
 	
 
-	// Sjekk funn.
-	std::wstring InstallFoldersFoundMsg = L"At least 1 RDR2 installation were found and will be used:\n\n";
-	InstallFoldersFoundMsg.append(L"EPIC: ");
-	InstallFoldersFoundMsg.append((InstallFolderEpic[0]==0 ? L"N/A" : InstallFolderEpic));
-	InstallFoldersFoundMsg.append(L"\n");
-	InstallFoldersFoundMsg.append(L"STEAM: ");
-	InstallFoldersFoundMsg.append((InstallFolderSteam[0]==0 ? L"N/A" : InstallFolderEpic));
+	// Sjekk og si ifra om funn.
+	std::wstring InstallFoldersFoundMsg = L"RDR2 path(s) that will be used:\n\n";
+	for (int a=0; a<StartupMetaPath.size(); a++) 
+		InstallFoldersFoundMsg.append(StartupMetaPath.at(a) + L"\n\n");
 
-	/*
 	MessageBoxW(
 		NULL,
 		(LPCWSTR)InstallFoldersFoundMsg.c_str(),
 		L"RDR2 Installation(s) Found",
 		MB_OK | MB_ICONINFORMATION
-	);*/
+	);
 
 	// Rydd opp.
 	RegCloseKey(rdr2RegKey);
 
 	// Sjekk om startup.meta eksisterer, evt. les gyldig passord.
 	// Gyldig = at det er pakket inn i <djrdr2></djrdr2> tagger.
-	if (MiscStaticFuncsClass::FileExistsW(StartupMetaPath.c_str())) {
-		std::wregex rxPasswordTag;
-		std::wsmatch m;
-		rxPasswordTag.assign(L"<djrdr2>(.*)<\/djrdr2>");
-		std::wifstream StartupMetaRead(StartupMetaPath, std::ios::binary);
-		std::wstring StartupMetaLine;
-		while (std::getline(StartupMetaRead, StartupMetaLine)) {
-			if (std::regex_search(StartupMetaLine, m, rxPasswordTag)) {
-				//MessageBoxW(0, m[1].str().c_str(), L"test", MB_OK | MB_ICONINFORMATION);
-				ThePassword = m[1].str().c_str();
+	for (int a=0; a<StartupMetaPath.size(); a++) {
+		if (MiscStaticFuncsClass::FileExistsW(StartupMetaPath.at(a).c_str())) {
+			std::wregex rxPasswordTag;
+			std::wsmatch m;
+			rxPasswordTag.assign(L"<djrdr2>([^<]*)<\\/djrdr2>");
+			std::wifstream StartupMetaRead(StartupMetaPath.at(a), std::ios::binary);
+			std::wstring StartupMetaLine;
+			while (std::getline(StartupMetaRead, StartupMetaLine)) {
+				if (std::regex_search(StartupMetaLine, m, rxPasswordTag)) {
+					//MessageBoxW(0, m[1].str().c_str(), L"test", MB_OK | MB_ICONINFORMATION);
+					ThePassword = m[1].str().c_str();
+				}
 			}
+			StartupMetaRead.close();
 		}
-		StartupMetaRead.close();
 	}
 
 	// Perform application initialization:
@@ -383,7 +397,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					if (SwitchIsOn) {
 						
 						// Fjern startup.meta
-						_wremove(StartupMetaPath.c_str());
+						for (int a=0; a<StartupMetaPath.size(); a++)
+							_wremove(StartupMetaPath.at(a).c_str());
 
 						// Oppdater bryterbilde.
 						OnOffBtnImg = LoadImageW(
@@ -410,10 +425,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 						// Skriv ny/oppdater fil.
 						try {
-							std::wofstream NyStartupMeta(StartupMetaPath, std::ios::out | std::ios::binary);
-							NyStartupMeta << u8"" << StartupMetaText.c_str() << u8"\n";
-							NyStartupMeta << u8"<djrdr2>" << ThePassword.c_str() << u8"</djrdr2>";
-							NyStartupMeta.close();
+							for (int a=0; a<StartupMetaPath.size(); a++) {
+								std::wofstream NyStartupMeta(StartupMetaPath.at(a), std::ios::out | std::ios::binary);
+								NyStartupMeta << L"" << StartupMetaText.c_str() << L"\n";
+								NyStartupMeta << L"<djrdr2>" << ThePassword.c_str() << L"</djrdr2>";
+								NyStartupMeta.close();
+							}
 						} catch(...) {
 							MiscStaticFuncsClass::GetErrorW(L"Could not write startup.meta...", false);
 						}
